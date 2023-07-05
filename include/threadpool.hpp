@@ -2,7 +2,6 @@
 
 #include "threadsafe_queue.hpp"
 #include <atomic>
-#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -29,6 +28,9 @@ class threadpool
         {
             if (config_.core_threads > config_.max_threads)
                 available_ = false;
+            
+            if (available_)
+                start();
         }
         threadpool(const threadpool&) = delete;
         threadpool(threadpool&&) = delete;
@@ -75,7 +77,7 @@ class threadpool
             thread_ptr thread_;
             thread_flag_atomic flag_;
 
-            thread_wrapper() : thread_(nullptr), flag_(thread_flag::CORE) {}
+            thread_wrapper() : thread_(), flag_(thread_flag::CORE) {}
             thread_wrapper(const thread_wrapper&) = delete;
             thread_wrapper(thread_wrapper&&) = delete;
             thread_wrapper& operator=(const thread_wrapper&) = delete;
@@ -105,3 +107,30 @@ class threadpool
         std::mutex mutex_;
         std::condition_variable cv_;
 };
+
+
+template<typename F, typename... Args>
+inline auto threadpool::async(F&& f, Args&&... args) -> std::future<decltype(f(args...))>
+{
+    {
+        add_cache_thread();
+    }
+
+    std::function<decltype(f(args...))()> task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+    auto task_ptr = std::make_shared<std::packaged_task<decltype(f(args...))()>>(task);
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!available_ || shutdown_)
+        return task_ptr->get_future();
+
+    std::function<void()> wrapped_task = [task_ptr] {
+        (*task_ptr)();
+    };
+
+    tasks_.push(wrapped_task);
+
+    cv_.notify_one();
+
+    return task_ptr->get_future();
+}
