@@ -33,3 +33,5 @@ For each thread in the thread pool, it may receive a task at some point. The exa
 - Swith for recycle thread or not
 
 - Swith for log
+
+- Priority Queue
