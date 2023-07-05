@@ -97,11 +97,14 @@ class threadsafe_queue_v2
 	        std::unique_ptr<node> new_node(new node);
 	        node* new_tail = new_node.get();
 
-	        std::lock_guard<std::mutex> tail_lock(tail_mutex_);
-	        tail_->data = std::make_shared<T>(obj);
-	        tail_->next = std::move(new_node);
-	        tail_ = new_tail;
-	        size_++;
+            {
+	            std::lock_guard<std::mutex> tail_lock(tail_mutex_);
+	            tail_->data = std::make_shared<T>(obj);
+	            tail_->next = std::move(new_node);
+	            tail_ = new_tail;
+	            size_++;
+            }
+
 	        cv_.notify_one();
         }
 
