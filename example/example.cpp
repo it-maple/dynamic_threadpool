@@ -30,7 +30,6 @@ int main()
     for(int i = 0; i < 8; ++i) 
     {
         auto future = pool.async(test, i);
-        // auto async_future = pool.enqueue(test, i);
         results.push_back(std::move(future));
     }
 
