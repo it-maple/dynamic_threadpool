@@ -1,4 +1,4 @@
-# Thread Pool
+# Dynamic Thread Pool
 
 ### Basic
 
