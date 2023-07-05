@@ -1,4 +1,5 @@
 #include "threadpool.hpp"
+#include <chrono>
 #include <mutex>
 
 void threadpool::init()
@@ -9,8 +10,9 @@ void threadpool::init()
     for (int i = 0; i < config_.core_threads; i++)
     {
         thread_wrapper_ptr wrapped_thread_ptr = std::make_shared<thread_wrapper>();
-        wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func, this));
         wrapped_thread_ptr->flag_.store(thread_flag::CORE);
+        // wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func, this));
+        wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func_with_flag, this, wrapped_thread_ptr->flag_));
         workers_.push_back(std::move(wrapped_thread_ptr));
     }
 
@@ -26,11 +28,41 @@ void threadpool::thread_func()
         if (!available_ || shutdown_)
             return;
 
+        // if () ;
         cv_.wait(lock, [this] {
             return !tasks_.empty();
         });
 
         if (!shutdown_)
+        {
+            auto task = tasks_.wait_and_pop();
+            (*task)();
+        }
+    }
+}
+
+void threadpool::thread_func_with_flag(thread_flag flag)
+{
+    while (true)
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+
+        if (!available_ || shutdown_)
+            return;
+
+        bool is_timeout{false};
+        if (flag == thread_flag::CORE)
+        {
+            cv_.wait(lock, [this] {
+                return !tasks_.empty();
+            });
+        }
+        else
+        {
+            is_timeout = cv_.wait_for(lock, std::chrono::seconds(config_.timeout), [this] { return !tasks_.empty(); });
+        }
+
+        if (!is_timeout && !shutdown_)
         {
             auto task = tasks_.wait_and_pop();
             (*task)();
@@ -52,8 +84,9 @@ void threadpool::add_cache_thread()
         for (int i = config_.core_threads; i < config_.max_threads; i++) 
         {
             thread_wrapper_ptr wrapped_thread_ptr;
-            wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func, this));
-            wrapped_thread_ptr->flag_.store(thread_flag::CORE);
+            wrapped_thread_ptr->flag_.store(thread_flag::CACHE);
+            // wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func, this));
+            wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func_with_flag, this, wrapped_thread_ptr->flag_));
             workers_.push_back(std::move(wrapped_thread_ptr));
         }
     }
