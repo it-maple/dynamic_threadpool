@@ -45,27 +45,6 @@ class threadpool
         }
 
     private:
-        void init();
-
-        void thread_func();
-
-        void add_cache_thread();
-
-    public:
-        void reset_config(const threadpool_config& config);
-
-        bool is_available() const { return available_; }
-
-        void start();
-
-        void shutdown();
-
-        void submit(std::function<void()> func);
-
-        template<typename F, typename... Args>
-        auto async(F&& f, Args&&... args) -> std::future<decltype(f(args...))>;
-
-    private:
         enum class thread_flag { CORE, CACHE };
 
         using thread_ptr = std::shared_ptr<std::thread>;
@@ -89,6 +68,29 @@ class threadpool
         };
 
         using thread_wrapper_ptr = std::shared_ptr<thread_wrapper>;
+
+    private:
+        void init();
+
+        void thread_func();
+
+        void thread_func_with_flag(thread_flag flag);
+
+        void add_cache_thread();
+
+    public:
+        void reset_config(const threadpool_config& config);
+
+        bool is_available() const { return available_; }
+
+        void start();
+
+        void shutdown();
+
+        void submit(std::function<void()> func);
+
+        template<typename F, typename... Args>
+        auto async(F&& f, Args&&... args) -> std::future<decltype(f(args...))>;
 
     private:
         bool shutdown_;
