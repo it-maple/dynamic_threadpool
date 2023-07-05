@@ -48,12 +48,11 @@ class threadpool
         enum class thread_flag { CORE, CACHE };
 
         using thread_ptr = std::shared_ptr<std::thread>;
-        using thread_flag_atomic = std::atomic<thread_flag>;
 
         struct thread_wrapper 
         {
             thread_ptr thread_;
-            thread_flag_atomic flag_;
+            thread_flag flag_;
 
             thread_wrapper() : thread_(), flag_(thread_flag::CORE) {}
             thread_wrapper(const thread_wrapper&) = delete;
