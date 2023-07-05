@@ -10,8 +10,7 @@ void threadpool::init()
     for (int i = 0; i < config_.core_threads; i++)
     {
         thread_wrapper_ptr wrapped_thread_ptr = std::make_shared<thread_wrapper>();
-        wrapped_thread_ptr->flag_.store(thread_flag::CORE);
-        // wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func, this));
+        wrapped_thread_ptr->flag_ = thread_flag::CORE;
         wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func_with_flag, this, wrapped_thread_ptr->flag_));
         workers_.push_back(std::move(wrapped_thread_ptr));
     }
@@ -84,8 +83,7 @@ void threadpool::add_cache_thread()
         for (int i = config_.core_threads; i < config_.max_threads; i++) 
         {
             thread_wrapper_ptr wrapped_thread_ptr;
-            wrapped_thread_ptr->flag_.store(thread_flag::CACHE);
-            // wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func, this));
+            wrapped_thread_ptr->flag_ = thread_flag::CACHE;
             wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func_with_flag, this, wrapped_thread_ptr->flag_));
             workers_.push_back(std::move(wrapped_thread_ptr));
         }
