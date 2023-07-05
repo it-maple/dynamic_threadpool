@@ -16,6 +16,7 @@ int test(int i)
 int main()
 {
     threadpool pool(4);
+    pool.start();
 
     pool.submit([] { 
         test(10);
@@ -36,5 +37,7 @@ int main()
     for (auto & result : results)
         std::cout << result.get() << std::endl;
     
+    pool.shutdown();
+
     return 0;
 }
