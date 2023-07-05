@@ -20,3 +20,16 @@ For each thread in the thread pool, it may receive a task at some point. The exa
 
     > this can be achieved by setting an internal variable as a token and having each worker thread check that token periodically.
 
+### Feature
+
+- Lazy initialization.
+
+- Dynamicly recycle thread.
+
+- Different way for executing task: getting result from aysnchronous task and no result.
+
+### TODO List
+
+- Swith for recycle thread or not
+
+- Swith for log
