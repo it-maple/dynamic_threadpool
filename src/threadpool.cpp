@@ -81,7 +81,7 @@ void threadpool::add_cache_thread()
 
     auto size = tasks_.get_size();
     // (a << b) ==> (a * 2 ^ b)
-    if (size >= static_cast<size_t>(config_.core_threads << 5))
+    if (workers_.size() > 0 && size >= static_cast<size_t>(config_.core_threads << 2))
     {
         for (int i = config_.core_threads; i < config_.max_threads; i++) 
         {
