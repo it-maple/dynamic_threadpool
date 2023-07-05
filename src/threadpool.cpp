@@ -61,7 +61,10 @@ void threadpool::thread_func_with_flag(thread_flag flag)
             is_timeout = cv_.wait_for(lock, std::chrono::seconds(config_.timeout), [this] { return !tasks_.empty(); });
         }
 
-        if (!is_timeout && !shutdown_)
+        if (is_timeout)
+            return;
+
+        if (!shutdown_)
         {
             auto task = tasks_.wait_and_pop();
             (*task)();
