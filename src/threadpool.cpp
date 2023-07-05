@@ -3,14 +3,8 @@
 
 void threadpool::init()
 {
-    std::unique_lock<std::mutex> lock(mutex_);
-
     if (!available_ || shutdown_)
         return;
-
-    // wait for task to enqueue
-    // if (tasks_.get_size() == 0)
-        // return;
 
     for (int i = 0; i < config_.core_threads; i++)
     {
@@ -19,6 +13,8 @@ void threadpool::init()
         wrapped_thread_ptr->flag_.store(thread_flag::CORE);
         workers_.push_back(std::move(wrapped_thread_ptr));
     }
+
+    inited_ = true;
 }
 
 void threadpool::thread_func()
@@ -66,16 +62,23 @@ void threadpool::add_cache_thread()
 void threadpool::reset_config(const threadpool_config& config)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    std::call_once(reset_once_, [this, &config] {
-        config_.core_threads = config.core_threads;
-        config_.max_threads = config.max_threads;
-        config_.timeout = config.timeout;
+
+    config_.core_threads = config.core_threads;
+    config_.max_threads = config.max_threads;
+    config_.timeout = config.timeout;
+
+    if (config.core_threads > config.max_threads)
+        available_ = false;
+    else
         available_ = true;
-    });
 }
 
 void threadpool::start()
 {
+    // wait for task to enqueue
+    if (tasks_.get_size() == 0)
+        return;
+
     std::call_once(init_once_, [this] { init(); });
 }
 
@@ -99,12 +102,21 @@ void threadpool::submit(std::function<void()> func)
         add_cache_thread();
     }
 
-    std::lock_guard<std::mutex> lock(mutex_);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
 
-    if (!available_ || shutdown_)
-        return;
+        if (!available_ || shutdown_)
+            return;
 
-    tasks_.push(func);   
+        tasks_.push(func);   
+    }
+
+    // lazy initialization for worker thread
+    {
+        std::lock_guard<std::mutex> lock(init_mutex_);
+        if (!inited_)
+            start();
+    }
 
     cv_.notify_one();
 }
