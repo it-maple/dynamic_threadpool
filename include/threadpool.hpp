@@ -23,14 +23,11 @@ struct threadpool_config
 class threadpool
 {
     public:
-        threadpool(int pool_size) : shutdown_(false), available_(true), config_({pool_size, pool_size, std::chrono::seconds(0)}) {}
-        threadpool(threadpool_config config) : shutdown_(false), available_(true), config_(config) 
+        threadpool(int pool_size) : shutdown_(false), available_(true), inited_(false), config_({pool_size, pool_size, std::chrono::seconds(0)}) {}
+        threadpool(threadpool_config config) : shutdown_(false), available_(true), inited_(false), config_(config) 
         {
             if (config_.core_threads > config_.max_threads)
                 available_ = false;
-            
-            if (available_)
-                start();
         }
         threadpool(const threadpool&) = delete;
         threadpool(threadpool&&) = delete;
@@ -56,6 +53,8 @@ class threadpool
 
     public:
         void reset_config(const threadpool_config& config);
+
+        bool is_available() const { return available_; }
 
         void start();
 
@@ -94,17 +93,18 @@ class threadpool
     private:
         bool shutdown_;
         bool available_;
+        bool inited_;
 
         threadpool_config config_;
 
         std::once_flag init_once_;
-        std::once_flag reset_once_;
 
         // std::vector<std::thread> workers_;
         std::vector<thread_wrapper_ptr> workers_;
         mutable threadsafe_queue_v2<std::function<void()>> tasks_;
 
         std::mutex mutex_;
+        std::mutex init_mutex_;
         std::condition_variable cv_;
 };
 
@@ -119,16 +119,25 @@ inline auto threadpool::async(F&& f, Args&&... args) -> std::future<decltype(f(a
     std::function<decltype(f(args...))()> task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
     auto task_ptr = std::make_shared<std::packaged_task<decltype(f(args...))()>>(task);
 
-    std::lock_guard<std::mutex> lock(mutex_);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
 
-    if (!available_ || shutdown_)
-        return task_ptr->get_future();
+        if (!available_ || shutdown_)
+            return task_ptr->get_future();
 
-    std::function<void()> wrapped_task = [task_ptr] {
-        (*task_ptr)();
-    };
+        std::function<void()> wrapped_task = [task_ptr] {
+            (*task_ptr)();
+        };
 
-    tasks_.push(wrapped_task);
+        tasks_.push(wrapped_task);
+    }
+
+    // lazy initialization for worker thread
+    {
+        std::lock_guard<std::mutex> lock(init_mutex_);
+        if (!inited_)
+            start();
+    }
 
     cv_.notify_one();
 

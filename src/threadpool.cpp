@@ -1,4 +1,5 @@
 #include "threadpool.hpp"
+#include <mutex>
 
 void threadpool::init()
 {
@@ -8,18 +9,15 @@ void threadpool::init()
         return;
 
     // wait for task to enqueue
-    cv_.wait(lock, [this] {
-        return !tasks_.empty();
-    });
+    // if (tasks_.get_size() == 0)
+        // return;
 
     for (int i = 0; i < config_.core_threads; i++)
     {
-        // workers_.emplace_back(std::bind(&threadpool::thread_func, this));
-
-        thread_wrapper_ptr wrapped_thread_ptr;
+        thread_wrapper_ptr wrapped_thread_ptr = std::make_shared<thread_wrapper>();
         wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func, this));
         wrapped_thread_ptr->flag_.store(thread_flag::CORE);
-        workers_.emplace_back(std::move(wrapped_thread_ptr));
+        workers_.push_back(std::move(wrapped_thread_ptr));
     }
 }
 
@@ -57,10 +55,10 @@ void threadpool::add_cache_thread()
     {
         for (int i = config_.core_threads; i < config_.max_threads; i++) 
         {
-            thread_wrapper wrapped_thread;
-            wrapped_thread.thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func, this));
-            wrapped_thread.flag_.store(thread_flag::CACHE);
-            workers_.emplace_back(std::move(wrapped_thread));
+            thread_wrapper_ptr wrapped_thread_ptr;
+            wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func, this));
+            wrapped_thread_ptr->flag_.store(thread_flag::CORE);
+            workers_.push_back(std::move(wrapped_thread_ptr));
         }
     }
 }
@@ -78,7 +76,6 @@ void threadpool::reset_config(const threadpool_config& config)
 
 void threadpool::start()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
     std::call_once(init_once_, [this] { init(); });
 }
 
@@ -107,33 +104,7 @@ void threadpool::submit(std::function<void()> func)
     if (!available_ || shutdown_)
         return;
 
-
     tasks_.push(func);   
 
     cv_.notify_one();
-}
-
-
-template<typename F, typename... Args>
-auto threadpool::async(F&& f, Args&&... args) -> std::future<decltype(f(args...))>
-{
-    {
-        add_cache_thread();
-    }
-
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    if (!available_ || shutdown_)
-        return;
-
-    std::function<decltype(f(args...))()> task(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
-    auto task_ptr = std::make_shared<std::packaged_task<decltype(f(args...))()>>(task);
-
-    std::function<void()> wrapped_task = [task_ptr] {
-        (*task_ptr)();
-    };
-
-    tasks_.push(wrapped_task);
-
-    return task_ptr->get_future();
 }
