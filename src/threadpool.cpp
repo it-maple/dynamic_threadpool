@@ -1,6 +1,7 @@
 #include "threadpool.hpp"
 #include <chrono>
 #include <mutex>
+#include <thread>
 
 void threadpool::init()
 {
@@ -62,7 +63,10 @@ void threadpool::thread_func_with_flag(thread_flag flag)
         }
 
         if (is_timeout)
+        {
+            cache_workers_.erase(std::this_thread::get_id());
             return;
+        }
 
         if (!shutdown_)
         {
@@ -86,9 +90,11 @@ void threadpool::add_cache_thread()
         for (int i = config_.core_threads; i < config_.max_threads; i++) 
         {
             thread_wrapper_ptr wrapped_thread_ptr;
+            auto thread_id = wrapped_thread_ptr->thread_->get_id();
             wrapped_thread_ptr->flag_ = thread_flag::CACHE;
             wrapped_thread_ptr->thread_ = std::make_shared<std::thread>(std::bind(&threadpool::thread_func_with_flag, this, wrapped_thread_ptr->flag_));
-            workers_.push_back(std::move(wrapped_thread_ptr));
+            // workers_.push_back(std::move(wrapped_thread_ptr));
+            cache_workers_[thread_id] = wrapped_thread_ptr;
         }
     }
 }
