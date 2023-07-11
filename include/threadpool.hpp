@@ -1,12 +1,12 @@
 #pragma once
 
 #include "threadsafe_queue.hpp"
-#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
+#include <map>
 #include <future>
 #include <functional>
 
@@ -39,6 +39,11 @@ class threadpool
             {
                 if (worker->thread_->joinable())
                     worker->thread_->join();
+            }
+            for (auto & pair : cache_workers_)
+            {
+                if (pair.second->thread_->joinable())
+                    pair.second->thread_->join();
             }
 
             shutdown();
@@ -102,6 +107,7 @@ class threadpool
 
         // std::vector<std::thread> workers_;
         std::vector<thread_wrapper_ptr> workers_;
+        std::map<std::thread::id, thread_wrapper_ptr> cache_workers_;
         mutable threadsafe_queue_v2<std::function<void()>> tasks_;
 
         std::mutex mutex_;
